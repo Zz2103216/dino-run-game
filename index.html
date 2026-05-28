@@ -55,7 +55,7 @@
 <div class="game-container">
   <h1>🦖🔫 武装小恐龙跑酷</h1>
   <div class="hint" id="hintBar">
-    <kbd>空格</kbd>/<kbd>↑</kbd> 跳跃 &nbsp; <kbd>鼠标</kbd>瞄准 &nbsp; <kbd>J</kbd>/<kbd>点击</kbd> 射击 &nbsp; <kbd>↓</kbd> 匍匐<br>
+    <kbd>空格</kbd>/<kbd>↑</kbd> 跳跃  <kbd>A</kbd>/<kbd>D</kbd> BOSS战走位  <kbd>鼠标</kbd>瞄准  <kbd>J</kbd>/<kbd>点击</kbd> 射击  <kbd>↓</kbd> 匍匐<br>
     <span class="boss">⚠ 每50分触发BOSS战 ⚠ 🦅击杀+1护盾（挡弹幕） ⚠ 📦地面拾取弹药</span>
   </div>
 
@@ -143,9 +143,9 @@ let mouseX = 480, mouseY = 200;
 
 // 恐龙
 const dino = {
-  x: 80, y: GROUND_Y, w: 44, h: 48, vy: 0,
+  x: 80, y: GROUND_Y, w: 44, h: 48, vy: 0, vx: 0,
   jumping: false, crouching: false, legFrame: 0, muzzleFlash: 0,
-};
+  returning: false,
 
 // 弹药 & 护盾
 const START_AMMO = 3;
@@ -182,7 +182,7 @@ function initMenuParticles() {
 
 function resetGame() {
   gameOver = false; score = 0; kills = 0; speed = 6; frameCount = 0;
-  dino.y = GROUND_Y; dino.vy = 0; dino.jumping = false; dino.crouching = false;
+  dino.x = 80; dino.y = GROUND_Y; dino.vy = 0; dino.vx = 0; dino.jumping = false; dino.crouching = false; dino.returning = false;
   dino.legFrame = 0; dino.muzzleFlash = 0;
   ammo = START_AMMO; hp = 0; invincible = false; invincibleTimer = 0;
   obstacles = []; bullets = []; particles = []; ammoPickups = [];
@@ -335,7 +335,7 @@ function drawTutorial() {
     { icon: '🏃', title: '移动', keys: '空格 / ↑ 跳跃    ↓ 匍匐躲避', y: py + 82 },
     { icon: '🎯', title: '射击', keys: '鼠标移动 瞄准    J / 左键点击 开火', y: py + 130 },
     { icon: '🦅', title: '战斗', keys: '打老鹰 +1护盾 · +2分    护盾抵挡BOSS弹幕', y: py + 178 },
-    { icon: '🐉', title: 'BOSS', keys: '每 50 分触发巨龙    弹幕越来越密集！', y: py + 226 },
+    { icon: '🐉', title: 'BOSS', keys: '每 50 分触发巨龙    A/D 左右走位躲弹幕', y: py + 226 },
     { icon: '📦', title: '补给', keys: '地面弹药箱无限拾取    匍匐可躲避弹幕', y: py + 274 },
   ];
 
@@ -573,7 +573,7 @@ function updateBoss(){
         if(hp>0){hp--;invincible=true;invincibleTimer=INVINCIBLE_DURATION;
           document.getElementById('hp').textContent=hp;spawnParticles(dino.x+dino.w/2,dino.y-dino.h/2,6,['#4fc3f7','#fff']);}
         else{endGame();return;}}}}
-  else if(b.state==='dying'){b.y+=2;if(b.y>GROUND_Y+50){b.state='dead';bossActive=false;boss=null;nextBossScore=score+50;bossProjectiles=[];}}
+  else if(b.state==='dying'){b.y+=2;if(b.y>GROUND_Y+50){b.state='dead';bossActive=false;boss=null;nextBossScore=score+50;bossProjectiles=[];dino.returning=true;}}
 }
 function updateBossProjectiles(){
   for(let i=bossProjectiles.length-1;i>=0;i--){const bp=bossProjectiles[i];bp.x+=bp.vx;bp.y+=bp.vy;
@@ -656,6 +656,19 @@ function update(){
   if(dino.muzzleFlash>0){dino.muzzleFlash-=0.15;if(dino.muzzleFlash<0)dino.muzzleFlash=0;}
   dino.vy+=GRAVITY;dino.y+=dino.vy;
   if(dino.y>=GROUND_Y){dino.y=GROUND_Y;dino.vy=0;dino.jumping=false;}
+
+  // BOSS战期间允许前后移动
+  if(bossActive&&boss&&boss.state==="fighting"){
+    const moveSpd=3.5;
+    if(keysDown["KeyA"]||keysDown["ArrowLeft"])dino.vx=-moveSpd;
+    else if(keysDown["KeyD"]||keysDown["ArrowRight"])dino.vx=moveSpd;
+    else dino.vx*=0.8;
+    dino.x+=dino.vx;
+    dino.x=Math.max(20,Math.min(W-120,dino.x));
+  }else if(dino.returning){
+    dino.x+=(80-dino.x)*0.08;
+    if(Math.abs(dino.x-80)<0.5){dino.x=80;dino.returning=false;}
+  }
   if(frameCount%200===0)speed+=0.3;
   if(!bossActive&&score>=nextBossScore&&!gameOver)triggerBoss();
   if(!bossActive&&frameCount%Math.max(40,90-score*0.5)===0)spawnObstacle();
@@ -742,6 +755,7 @@ document.addEventListener('keydown',(e)=>{
   keysDown[e.code]=true;
   if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();jump();}
   else if(e.code==='KeyJ'||e.code==='Enter'){e.preventDefault();if(gameState==='tutorial'||gameState==='playing')shoot();}
+  if(e.code==="KeyA"||e.code==="ArrowLeft"||e.code==="KeyD"||e.code==="ArrowRight"){e.preventDefault();}
   else if(e.code==='ArrowDown'||e.code==='KeyS'){e.preventDefault();if(!dino.jumping&&dino.y>=GROUND_Y)dino.crouching=true;}
 });
 document.addEventListener('keyup',(e)=>{keysDown[e.code]=false;if(e.code==='ArrowDown'||e.code==='KeyS')dino.crouching=false;});
