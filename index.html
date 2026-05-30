@@ -95,7 +95,7 @@
     <div id="lobbyMain">
       <h3>🌐 联机对战</h3>
       <div class="sub">与其他玩家实时对战</div>
-      <button class="lobby-btn create" onclick="createRoom()">🏠 创建房间</button>
+      <button class="lobby-btn create" onclick="showCreatePanel()">🏠 创建房间</button>
       <button class="lobby-btn join" onclick="showJoinPanel()">🚪 加入房间</button>
       <button class="lobby-btn cancel" onclick="closeLobby()">↩ 返回</button>
     </div>
@@ -166,88 +166,128 @@ let gameOver = false, score = 0, kills = 0;
 let bestScore = parseInt(localStorage.getItem('dinoBest') || '0');
 
 // ========== 联机模式 ==========
+// 10种小恐龙颜色
+const DINO_COLORS = [
+  { name: '赤红', body: '#d32f2f', bodyDark: '#b71c1c' },
+  { name: '橙橘', body: '#e65100', bodyDark: '#bf360c' },
+  { name: '金黄', body: '#f9a825', bodyDark: '#f57f17' },
+  { name: '翠绿', body: '#388e3c', bodyDark: '#1b5e20' },
+  { name: '天蓝', body: '#1976d2', bodyDark: '#0d47a1' },
+  { name: '深紫', body: '#7b1fa2', bodyDark: '#4a148c' },
+  { name: '墨黑', body: '#424242', bodyDark: '#212121' },
+  { name: '银白', body: '#9e9e9e', bodyDark: '#616161' },
+  { name: '粉红', body: '#e91e63', bodyDark: '#880e4f' },
+  { name: '棕褐', body: '#6d4c41', bodyDark: '#3e2723' },
+];
+let dinoColorIdx = 0, playerName = '', isHost = false;
+
 let multiplayerMode = false, socket = null, roomCode = '';
-let remotePlayer = null; // { x, y, crouching, jumping, score, kills, hp, ammo, muzzleFlash, legFrame, alive }
-let remoteBossLevel = 0;
+let remotePlayer = null;
+
+// 颜色选择器
+function buildColorPicker(containerId, defaultIdx) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  DINO_COLORS.forEach((c, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'color-dot' + (i === defaultIdx ? ' selected' : '');
+    dot.style.backgroundColor = c.body;
+    dot.style.color = c.body;
+    dot.title = c.name;
+    dot.onclick = () => {
+      container.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+      dot.classList.add('selected');
+      dinoColorIdx = i;
+    };
+    container.appendChild(dot);
+  });
+}
+
+function renderPlayerList(players, containerId, showTag) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  let html = '';
+  players.forEach((p, i) => {
+    const color = DINO_COLORS[p.colorIdx !== undefined ? p.colorIdx : 0];
+    html += '<div class="player-item">';
+    html += '<div class="dot" style="background:' + color.body + '"></div>';
+    html += '<div class="name">' + (p.name || '玩家' + (i+1)) + '</div>';
+    if (showTag && p.isHost) html += '<div class="tag">房主</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html || '<div class="sub" style="text-align:center">等待对手加入...</div>';
+}
+
+function updateStartButton(players) {
+  const btn = document.getElementById('startGameBtn');
+  if (!btn) return;
+  const hasTwo = players && players.length >= 2;
+  btn.disabled = !hasTwo;
+  btn.textContent = hasTwo ? '🚀 开始游戏' : '等待对手加入...';
+}
 
 function initSocket() {
   if (socket) return;
   socket = io();
-  socket.on('connect', () => { console.log('[联机] 已连接', socket.id); });
+  socket.on('connect', () => {});
   socket.on('room-created', (data) => {
     roomCode = data.code;
     document.getElementById('roomCodeDisplay').textContent = roomCode;
+    renderPlayerList(data.players || [], 'createPlayerList', true);
+    updateStartButton(data.players || []);
   });
-  socket.on('join-error', (msg) => {
-    document.getElementById('joinError').textContent = msg;
+  socket.on('room-updated', (data) => {
+    const players = data.players || [];
+    if (isHost) { renderPlayerList(players, 'createPlayerList', true); updateStartButton(players); }
+    else { renderPlayerList(players, 'waitPlayerList', true); }
+  });
+  socket.on('join-error', (msg) => { document.getElementById('joinError').textContent = msg; });
+  socket.on('room-joined', (data) => {
+    roomCode = data.code; isHost = false;
+    document.getElementById('lobbyJoin').style.display = 'none';
+    document.getElementById('lobbyWaiting').style.display = '';
+    document.getElementById('waitRoomCode').textContent = roomCode;
+    socket.emit('player-info', { name: playerName, colorIdx: dinoColorIdx });
   });
   socket.on('game-start', (data) => {
     multiplayerMode = true;
     document.getElementById('lobbyOverlay').classList.remove('show');
-    document.getElementById('lobbyWaitStatus').textContent = '对手已加入！';
-    resetGame();
-    gameState = 'countdown';
-    countdownValue = 3;
-    countdownStartFrame = frameCount;
+    const opp = data.players.find(p => p.id !== socket.id);
+    if (opp) { if (!remotePlayer) remotePlayer = {}; remotePlayer.name = opp.name; remotePlayer.colorIdx = opp.colorIdx; }
+    resetGame(); gameState = 'countdown'; countdownValue = 3; countdownStartFrame = frameCount;
     canvas.style.cursor = 'none';
     document.getElementById('scoreboard').style.display = '';
     document.getElementById('hintBar').style.display = '';
     document.getElementById('restartBtn').style.display = 'none';
   });
-  socket.on('remote-update', (data) => {
-    if (!remotePlayer) remotePlayer = {};
-    Object.assign(remotePlayer, data);
-  });
-  socket.on('remote-score', (data) => {
-    if (!remotePlayer) remotePlayer = {};
-    remotePlayer.score = data.score;
-    remotePlayer.kills = data.kills;
-  });
-  socket.on('remote-shoot', (data) => {
-    if (!remotePlayer) remotePlayer = {};
-    remotePlayer.muzzleFlash = 1;
-  });
-  socket.on('remote-died', (data) => {
-    if (!remotePlayer) remotePlayer = {};
-    remotePlayer.alive = false;
-    remotePlayer.score = data.score;
-    remotePlayer.kills = data.kills;
-    remotePlayer.opponentDied = true;
-  });
-  socket.on('remote-boss-kill', (data) => {
-    if (!remotePlayer) remotePlayer = {};
-    remotePlayer.bossJustKilled = true;
-  });
-  socket.on('opponent-left', () => {
-    if (gameState === 'playing' && !gameOver) {
-      multiplayerMode = false;
-      remotePlayer = null;
-    }
-  });
-  socket.on('game-draw', (data) => {
-    // 双方都死了
-  });
+  socket.on('remote-update', (data) => { if (!remotePlayer) remotePlayer = {}; Object.assign(remotePlayer, data); });
+  socket.on('remote-score', (data) => { if (!remotePlayer) remotePlayer = {}; remotePlayer.score = data.score; remotePlayer.kills = data.kills; });
+  socket.on('remote-shoot', () => { if (!remotePlayer) remotePlayer = {}; remotePlayer.muzzleFlash = 1; });
+  socket.on('remote-died', (data) => { if (!remotePlayer) remotePlayer = {}; remotePlayer.alive = false; remotePlayer.score = data.score; remotePlayer.kills = data.kills; });
+  socket.on('opponent-left', () => { if (gameState === 'playing' && !gameOver) { multiplayerMode = false; remotePlayer = null; } });
 }
 
-function createRoom() {
+function showCreatePanel() {
   document.getElementById('lobbyMain').style.display = 'none';
   document.getElementById('lobbyCreate').style.display = '';
-  initSocket();
-  socket.emit('create-room');
-  document.getElementById('lobbyWaitStatus').textContent = '等待对手加入...';
-}
-
-function cancelRoom() {
-  showMainPanel();
-  if (socket) { socket.disconnect(); socket = null; }
-  roomCode = '';
+  document.getElementById('lobbyJoin').style.display = 'none';
+  document.getElementById('lobbyWaiting').style.display = 'none';
+  dinoColorIdx = 0; isHost = true;
+  buildColorPicker('createColorPicker', 0);
+  initSocket(); socket.emit('create-room');
 }
 
 function showJoinPanel() {
   document.getElementById('lobbyMain').style.display = 'none';
   document.getElementById('lobbyJoin').style.display = '';
+  document.getElementById('lobbyCreate').style.display = 'none';
+  document.getElementById('lobbyWaiting').style.display = 'none';
   document.getElementById('joinError').textContent = '';
   document.getElementById('joinCodeInput').value = '';
+  document.getElementById('joinNameInput').value = '';
+  dinoColorIdx = 0; isHost = false;
+  buildColorPicker('joinColorPicker', 0);
   document.getElementById('joinCodeInput').focus();
 }
 
@@ -255,23 +295,23 @@ function showMainPanel() {
   document.getElementById('lobbyMain').style.display = '';
   document.getElementById('lobbyCreate').style.display = 'none';
   document.getElementById('lobbyJoin').style.display = 'none';
+  document.getElementById('lobbyWaiting').style.display = 'none';
 }
 
 function joinRoom() {
   const code = document.getElementById('joinCodeInput').value.trim();
-  if (code.length !== 4 || !/^\d{4}$/.test(code)) {
-    document.getElementById('joinError').textContent = '请输入4位数字房间号';
-    return;
-  }
+  const name = document.getElementById('joinNameInput').value.trim();
+  if (code.length !== 4 || !/^\d{4}$/.test(code)) { document.getElementById('joinError').textContent = '请输入4位数字房间号'; return; }
+  if (!name) { document.getElementById('joinError').textContent = '请输入你的名称'; return; }
+  playerName = name;
   initSocket();
-  socket.emit('join-room', code);
+  socket.emit('join-room', { code, name, colorIdx: dinoColorIdx });
 }
 
 function closeLobby() {
   if (socket) { socket.disconnect(); socket = null; }
   document.getElementById('lobbyOverlay').classList.remove('show');
-  multiplayerMode = false;
-  showMainPanel();
+  multiplayerMode = false; showMainPanel();
 }
 
 function showLobby() {
@@ -279,31 +319,30 @@ function showLobby() {
   showMainPanel();
 }
 
-// 发送玩家状态（每3帧发送一次减少网络开销）
+function requestStartGame() {
+  if (!isHost || !socket) return;
+  const name = document.getElementById('createNameInput').value.trim();
+  if (!name) { alert('请输入你的名称'); return; }
+  playerName = name;
+  socket.emit('player-info', { name, colorIdx: dinoColorIdx });
+  socket.emit('request-start');
+}
+
+function cancelRoom() {
+  showMainPanel();
+  if (socket) { socket.disconnect(); socket = null; }
+  roomCode = ''; isHost = false;
+}
+
 function sendPlayerState() {
   if (!multiplayerMode || !socket || !socket.connected) return;
   if (frameCount % 3 !== 0) return;
-  socket.emit('player-update', {
-    x: dino.x, y: dino.y, crouching: dino.crouching, jumping: dino.jumping,
-    legFrame: dino.legFrame, muzzleFlash: dino.muzzleFlash
-  });
+  socket.emit('player-update', { x: dino.x, y: dino.y, crouching: dino.crouching, jumping: dino.jumping, legFrame: dino.legFrame, muzzleFlash: dino.muzzleFlash });
   socket.emit('player-score', { score, kills });
 }
-
-function sendPlayerShoot() {
-  if (!multiplayerMode || !socket || !socket.connected) return;
-  socket.emit('player-shoot', {});
-}
-
-function sendPlayerDied() {
-  if (!multiplayerMode || !socket || !socket.connected) return;
-  socket.emit('player-died', { score, kills });
-}
-
-function sendBossKill() {
-  if (!multiplayerMode || !socket || !socket.connected) return;
-  socket.emit('player-boss-kill', {});
-}
+function sendPlayerShoot() { if (!multiplayerMode || !socket || !socket.connected) return; socket.emit('player-shoot', {}); }
+function sendPlayerDied() { if (!multiplayerMode || !socket || !socket.connected) return; socket.emit('player-died', { score, kills }); }
+function sendBossKill() { if (!multiplayerMode || !socket || !socket.connected) return; socket.emit('player-boss-kill', {}); }
 
 let speed = 6, frameCount = 0, menuFrame = 0;
 const GROUND_Y = H - 60;
