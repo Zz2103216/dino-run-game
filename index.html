@@ -70,6 +70,7 @@
     <span class="ammo">🔫 弹药: <span id="ammo">3</span></span>
     <span class="shield">🛡️ 护盾: <span id="hp">0</span></span>
     <span>🦅 击杀: <span id="kills">0</span></span>
+    <span class="remote-score" id="remoteScoreSpan" style="display:none">👤 对手: <span id="remoteScore">0</span></span>
   </div>
   <canvas id="game" width="960" height="400"></canvas>
 
@@ -86,6 +87,37 @@
   <button class="restart-btn" id="restartBtn" onclick="restartGame()" style="display:none">🔄 返回主菜单</button>
 </div>
 
+<!-- 联机大厅 -->
+<div class="lobby-overlay" id="lobbyOverlay">
+  <div class="lobby-panel" id="lobbyPanel">
+    <!-- 主面板 -->
+    <div id="lobbyMain">
+      <h3>🌐 联机对战</h3>
+      <div class="sub">与其他玩家实时对战</div>
+      <button class="lobby-btn create" onclick="createRoom()">🏠 创建房间</button>
+      <button class="lobby-btn join" onclick="showJoinPanel()">🚪 加入房间</button>
+      <button class="lobby-btn cancel" onclick="closeLobby()">↩ 返回</button>
+    </div>
+    <!-- 创建房间面板 -->
+    <div id="lobbyCreate" style="display:none">
+      <h3>🏠 等待对手加入...</h3>
+      <div class="room-code" id="roomCodeDisplay">----</div>
+      <div class="sub">把房间号发给朋友</div>
+      <div class="lobby-status" id="lobbyWaitStatus">等待中...</div>
+      <button class="lobby-btn cancel" onclick="cancelRoom()">取消</button>
+    </div>
+    <!-- 加入房间面板 -->
+    <div id="lobbyJoin" style="display:none">
+      <h3>🚪 输入房间号</h3>
+      <input type="text" class="lobby-input" id="joinCodeInput" placeholder="0000" maxlength="4" inputmode="numeric" pattern="[0-9]*">
+      <div class="lobby-error" id="joinError"></div>
+      <button class="lobby-btn join" onclick="joinRoom()">加入</button>
+      <button class="lobby-btn cancel" onclick="showMainPanel()">返回</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <script>
 /* ================================================
    广告配置 — 接入 Google AdSense 后替换下方占位
@@ -131,6 +163,148 @@ const W = canvas.width, H = canvas.height;
 let gameState = 'menu';
 let gameOver = false, score = 0, kills = 0;
 let bestScore = parseInt(localStorage.getItem('dinoBest') || '0');
+
+// ========== 联机模式 ==========
+let multiplayerMode = false, socket = null, roomCode = '';
+let remotePlayer = null; // { x, y, crouching, jumping, score, kills, hp, ammo, muzzleFlash, legFrame, alive }
+let remoteBossLevel = 0;
+
+function initSocket() {
+  if (socket) return;
+  socket = io();
+  socket.on('connect', () => { console.log('[联机] 已连接', socket.id); });
+  socket.on('room-created', (data) => {
+    roomCode = data.code;
+    document.getElementById('roomCodeDisplay').textContent = roomCode;
+  });
+  socket.on('join-error', (msg) => {
+    document.getElementById('joinError').textContent = msg;
+  });
+  socket.on('game-start', (data) => {
+    multiplayerMode = true;
+    document.getElementById('lobbyOverlay').classList.remove('show');
+    document.getElementById('lobbyWaitStatus').textContent = '对手已加入！';
+    resetGame();
+    gameState = 'countdown';
+    countdownValue = 3;
+    countdownStartFrame = frameCount;
+    canvas.style.cursor = 'none';
+    document.getElementById('scoreboard').style.display = '';
+    document.getElementById('hintBar').style.display = '';
+    document.getElementById('restartBtn').style.display = 'none';
+  });
+  socket.on('remote-update', (data) => {
+    if (!remotePlayer) remotePlayer = {};
+    Object.assign(remotePlayer, data);
+  });
+  socket.on('remote-score', (data) => {
+    if (!remotePlayer) remotePlayer = {};
+    remotePlayer.score = data.score;
+    remotePlayer.kills = data.kills;
+  });
+  socket.on('remote-shoot', (data) => {
+    if (!remotePlayer) remotePlayer = {};
+    remotePlayer.muzzleFlash = 1;
+  });
+  socket.on('remote-died', (data) => {
+    if (!remotePlayer) remotePlayer = {};
+    remotePlayer.alive = false;
+    remotePlayer.score = data.score;
+    remotePlayer.kills = data.kills;
+    remotePlayer.opponentDied = true;
+  });
+  socket.on('remote-boss-kill', (data) => {
+    if (!remotePlayer) remotePlayer = {};
+    remotePlayer.bossJustKilled = true;
+  });
+  socket.on('opponent-left', () => {
+    if (gameState === 'playing' && !gameOver) {
+      multiplayerMode = false;
+      remotePlayer = null;
+    }
+  });
+  socket.on('game-draw', (data) => {
+    // 双方都死了
+  });
+}
+
+function createRoom() {
+  document.getElementById('lobbyMain').style.display = 'none';
+  document.getElementById('lobbyCreate').style.display = '';
+  initSocket();
+  socket.emit('create-room');
+  document.getElementById('lobbyWaitStatus').textContent = '等待对手加入...';
+}
+
+function cancelRoom() {
+  showMainPanel();
+  if (socket) { socket.disconnect(); socket = null; }
+  roomCode = '';
+}
+
+function showJoinPanel() {
+  document.getElementById('lobbyMain').style.display = 'none';
+  document.getElementById('lobbyJoin').style.display = '';
+  document.getElementById('joinError').textContent = '';
+  document.getElementById('joinCodeInput').value = '';
+  document.getElementById('joinCodeInput').focus();
+}
+
+function showMainPanel() {
+  document.getElementById('lobbyMain').style.display = '';
+  document.getElementById('lobbyCreate').style.display = 'none';
+  document.getElementById('lobbyJoin').style.display = 'none';
+}
+
+function joinRoom() {
+  const code = document.getElementById('joinCodeInput').value.trim();
+  if (code.length !== 4 || !/^\d{4}$/.test(code)) {
+    document.getElementById('joinError').textContent = '请输入4位数字房间号';
+    return;
+  }
+  initSocket();
+  socket.emit('join-room', code);
+}
+
+function closeLobby() {
+  if (socket) { socket.disconnect(); socket = null; }
+  document.getElementById('lobbyOverlay').classList.remove('show');
+  multiplayerMode = false;
+  showMainPanel();
+}
+
+function showLobby() {
+  initSocket();
+  document.getElementById('lobbyOverlay').classList.add('show');
+  showMainPanel();
+}
+
+// 发送玩家状态（每3帧发送一次减少网络开销）
+function sendPlayerState() {
+  if (!multiplayerMode || !socket || !socket.connected) return;
+  if (frameCount % 3 !== 0) return;
+  socket.emit('player-update', {
+    x: dino.x, y: dino.y, crouching: dino.crouching, jumping: dino.jumping,
+    legFrame: dino.legFrame, muzzleFlash: dino.muzzleFlash
+  });
+  socket.emit('player-score', { score, kills });
+}
+
+function sendPlayerShoot() {
+  if (!multiplayerMode || !socket || !socket.connected) return;
+  socket.emit('player-shoot', {});
+}
+
+function sendPlayerDied() {
+  if (!multiplayerMode || !socket || !socket.connected) return;
+  socket.emit('player-died', { score, kills });
+}
+
+function sendBossKill() {
+  if (!multiplayerMode || !socket || !socket.connected) return;
+  socket.emit('player-boss-kill', {});
+}
+
 let speed = 6, frameCount = 0, menuFrame = 0;
 const GROUND_Y = H - 60;
 const GRAVITY = 0.8, JUMP_FORCE = -14, DOUBLE_JUMP_FORCE = Math.round(JUMP_FORCE / Math.SQRT2);
@@ -254,7 +428,8 @@ function drawMenu() {
   ctx.fillStyle = '#888'; ctx.font = '16px sans-serif';
   ctx.fillText('DINO COMMANDO · 像素风跑酷射击', W/2, titleY+82);
 
-  const btnX = W/2-130, btnY = 170, btnW = 260, btnH = 56;
+  // 单人游戏按钮
+  const btnX = W/2-130, btnY = 140, btnW = 260, btnH = 50;
   const hover = mouseX>btnX && mouseX<btnX+btnW && mouseY>btnY && mouseY<btnY+btnH;
   const pulse = 1+Math.sin(menuFrame*0.06)*0.03;
 
@@ -269,14 +444,31 @@ function drawMenu() {
   ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
   ctx.beginPath(); roundRect(btnX,btnY,btnW,btnH,18); ctx.stroke(); ctx.lineWidth = 1;
   ctx.fillStyle = '#fff';
-  ctx.font = `bold ${Math.round(24*pulse)}px sans-serif`;
-  ctx.fillText('⚡ 开 始 游 戏 ⚡', W/2, btnY+38);
+  ctx.font = `bold ${Math.round(22*pulse)}px sans-serif`;
+  ctx.fillText('⚡ 单人游戏', W/2, btnY+34);
+
+  // 联机对战按钮
+  const mpBtnY = btnY + 62, mpHover = mouseX>btnX && mouseX<btnX+btnW && mouseY>mpBtnY && mouseY<mpBtnY+btnH;
+
+  ctx.fillStyle = 'rgba(79,195,247,0.3)';
+  ctx.beginPath(); roundRect(btnX+3,mpBtnY+3,btnW,btnH,18); ctx.fill();
+
+  const mpBgG = ctx.createLinearGradient(btnX,mpBtnY,btnX,mpBtnY+btnH);
+  mpBgG.addColorStop(0, mpHover?'#4fc3f7':'#29b6f6');
+  mpBgG.addColorStop(1, mpHover?'#29b6f6':'#0288d1');
+  ctx.fillStyle = mpBgG;
+  ctx.beginPath(); roundRect(btnX,mpBtnY,btnW,btnH,18); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
+  ctx.beginPath(); roundRect(btnX,mpBtnY,btnW,btnH,18); ctx.stroke(); ctx.lineWidth = 1;
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${Math.round(22*pulse)}px sans-serif`;
+  ctx.fillText('🌐 联机对战', W/2, mpBtnY+34);
 
   ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px sans-serif';
-  ctx.fillText(`👑 最高分: ${bestScore}`, W/2, btnY+88);
-  if(bestScore>0){ctx.fillStyle='#888';ctx.font='14px sans-serif';ctx.fillText('打破你的记录吧！',W/2,btnY+112);}
+  ctx.fillText(`👑 最高分: ${bestScore}`, W/2, mpBtnY+76);
+  if(bestScore>0){ctx.fillStyle='#888';ctx.font='14px sans-serif';ctx.fillText('打破你的记录吧！',W/2,mpBtnY+98);}
 
-  const gy = btnY+140;
+  const gy = mpBtnY+118;
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath(); roundRect(W/2-320,gy-8,640,90,14); ctx.fill();
   ctx.fillStyle = '#aaa'; ctx.font = '13px sans-serif';
@@ -400,6 +592,31 @@ function getDinoHitbox() {
 }
 
 // ========== 绘制恐龙 ==========
+function drawRemotePlayer() {
+  if (!remotePlayer || !remotePlayer.x) return;
+  const rp = remotePlayer;
+  const rx = rp.x, ry = rp.y, rc = rp.crouching;
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.translate(rx, rc ? ry - dino.h*0.55 : ry - dino.h);
+  const bodyColor = '#555';
+  ctx.fillStyle = bodyColor; ctx.fillRect(8,4,28,24); ctx.fillRect(30,0,10,16); ctx.fillRect(12,0,20,8);
+  ctx.fillStyle = '#999'; ctx.fillRect(32,4,6,6);
+  ctx.fillStyle = '#333'; ctx.fillRect(35,6,3,4);
+  ctx.fillStyle = bodyColor; ctx.fillRect(31,2,8,3);
+  ctx.fillRect(38,12,6,4);
+  ctx.fillStyle = bodyColor; ctx.fillRect(0,10,10,6); ctx.fillRect(0,14,6,4);
+  if (!rp.jumping) {
+    if (rp.legFrame === 0) { ctx.fillRect(12, dino.h-4, 10, 6); ctx.fillRect(26, dino.h-6, 10, 6); }
+    else { ctx.fillRect(10, dino.h-6, 10, 6); ctx.fillRect(26, dino.h-4, 10, 6); }
+  }
+  // 名字标签
+  ctx.fillStyle = '#4fc3f7'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('对手', dino.w/2, -8);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 function drawDino() {
   const { x, y, w, h, legFrame, muzzleFlash, crouching } = dino;
   if (invincible && gameState === 'playing' && Math.floor(frameCount/4)%2===0) return;
@@ -611,7 +828,8 @@ function updateBossProjectiles(){
 function bossHit(){
   if(!boss||boss.state!=='fighting')return;boss.hp--;boss.flashTimer=8;spawnParticles(boss.x,boss.y,8,['#ff0','#f80','#fff']);
   if(boss.hp<=0){boss.state='dying';boss.flashTimer=0;
-    spawnParticles(boss.x,boss.y,40,['#ff0','#f80','#f00','#fff','#ffd700']);score+=10;document.getElementById('score').textContent=score;bossProjectiles=[];}
+    spawnParticles(boss.x,boss.y,40,['#ff0','#f80','#f00','#fff','#ffd700']);score+=10;document.getElementById('score').textContent=score;bossProjectiles=[];
+    if(multiplayerMode) sendBossKill();}
 }
 function spawnObstacle(){
   if(bossActive||gameState!=='playing')return;
@@ -629,6 +847,7 @@ function spawnObstacle(){
 function shoot(){
   if(gameState!=='playing'||gameOver||ammo<=0)return;
   ammo--;document.getElementById('ammo').textContent=ammo;dino.muzzleFlash=1;
+  if(multiplayerMode) sendPlayerShoot();
   const bx=dino.x+46,by=dino.y-(dino.crouching?dino.h*0.55:dino.h)+16;
   const angle=Math.atan2(mouseY-by,mouseX-bx),spd=10;
   bullets.push({x:bx,y:by,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,angle,isEnemy:false});
@@ -642,7 +861,8 @@ function jump(){
 function endGame(){
   gameOver=true;gameState='gameover';
   spawnParticles(dino.x+dino.w/2,dino.y-dino.h/2,30,['#e94560','#ffd700','#fff','#ff4444']);
-  updateBestScore();
+  if(!multiplayerMode) updateBestScore();
+  if(multiplayerMode){ sendPlayerDied(); }
   document.getElementById('restartBtn').style.display='';
   document.getElementById('restartBtn').textContent='🔄 返回主菜单';
   canvas.style.cursor='default';
@@ -740,6 +960,7 @@ function update(){
   updateBoss();updateBossProjectiles();if(gameOver)return;
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.3;p.life-=p.decay;if(p.life<=0)particles.splice(i,1);}
   for(const obs of obstacles){if((obs.type==='cactus'||obs.type==='barbwire'||obs.type==='beam')&&obs.x+(obs.ow||obs.w)<dino.x&&!obs.passed){obs.passed=true;score++;document.getElementById('score').textContent=score;}}
+  if(multiplayerMode) sendPlayerState();
 }
 
 // ========== 主绘制 ==========
@@ -764,9 +985,22 @@ function draw(){
   }
   for(const pk of ammoPickups)drawAmmoPickup(pk);
   for(const b of bullets)drawBullet(b);
-  drawDino();if(bossActive&&boss)drawBoss(boss);for(const bp of bossProjectiles)drawBullet(bp);
+  drawDino();
+  // 绘制远程玩家（幽灵形态）
+  if(multiplayerMode&&remotePlayer&&remotePlayer.alive!==false){
+    drawRemotePlayer();
+  }
+  if(bossActive&&boss)drawBoss(boss);for(const bp of bossProjectiles)drawBullet(bp);
   for(const p of particles){ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;
   if(gameState==='playing')drawCrosshair();
+  // 联机：更新对手分数显示
+  if(multiplayerMode&&remotePlayer){
+    const rss=document.getElementById('remoteScoreSpan');
+    rss.style.display='';
+    document.getElementById('remoteScore').textContent=remotePlayer.score||0;
+  } else {
+    document.getElementById('remoteScoreSpan').style.display='none';
+  }
   if(bossActive&&boss&&(boss.state==='entering'||boss.state==='fighting')){const barW=240,barH=14,barX=W/2-barW/2,barY=10;
     ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(barX-2,barY-2,barW+4,barH+4);ctx.fillStyle='#333';ctx.fillRect(barX,barY,barW,barH);
     const hpR=boss.hp/boss.maxHp;ctx.fillStyle=hpR>0.5?'#4caf50':hpR>0.25?'#ff9800':'#f44336';ctx.fillRect(barX,barY,barW*hpR,barH);
@@ -775,9 +1009,29 @@ function draw(){
   if(invincible&&gameState==='playing'){ctx.fillStyle='rgba(79,195,247,0.6)';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
     ctx.fillText('🛡️ 无敌',dino.x+dino.w/2,dino.y-(dino.crouching?dino.h*0.55:dino.h)-12);}
   if(gameState==='gameover'){ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#2d2d2d';ctx.font='bold 40px sans-serif';ctx.textAlign='center';ctx.fillText('💥 GAME OVER',W/2,H/2-15);
-    ctx.font='17px sans-serif';ctx.fillStyle='#999';
-    ctx.fillText(`击杀 ${kills} 只老鹰 · 击败 ${bossLevel} 个BOSS · 护盾 ${hp} · 得分 ${score}`,W/2,H/2+25);
+    ctx.fillStyle='#2d2d2d';ctx.font='bold 40px sans-serif';ctx.textAlign='center';
+    if(multiplayerMode){
+      const rp = remotePlayer||{};
+      const opponentAlive = rp.alive !== false;
+      const opponentScore = rp.score || 0;
+      if(opponentAlive){
+        ctx.fillText('😵 你输了！',W/2,H/2-15);
+        ctx.font='17px sans-serif';ctx.fillStyle='#aaa';
+        ctx.fillText(`对手仍在奔跑... 对方分数: ${opponentScore}`,W/2,H/2+15);
+      }else if(score > opponentScore){
+        ctx.fillText('🏆 你赢了！',W/2,H/2-15);
+      }else if(score < opponentScore){
+        ctx.fillText('😵 你输了！',W/2,H/2-15);
+      }else{
+        ctx.fillText('🤝 平局！',W/2,H/2-15);
+      }
+      ctx.font='17px sans-serif';ctx.fillStyle='#999';
+      ctx.fillText(`你: ${score}分 ${kills}杀  |  对手: ${opponentScore}分 ${rp.kills||0}杀`,W/2,H/2+25);
+    }else{
+      ctx.fillText('💥 GAME OVER',W/2,H/2-15);
+      ctx.font='17px sans-serif';ctx.fillStyle='#999';
+      ctx.fillText(`击杀 ${kills} 只老鹰 · 击败 ${bossLevel} 个BOSS · 护盾 ${hp} · 得分 ${score}`,W/2,H/2+25);
+    }
     ctx.fillText('点击下方按钮返回主菜单',W/2,H/2+55);
     ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='12px sans-serif';ctx.fillText('--- 赞助商广告 ---',W/2,H/2+85);
     ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(W/2-180,H/2+92,360,45);
@@ -800,6 +1054,7 @@ const keysDown={};
 document.addEventListener('keydown',(e)=>{
   if(gameState==='menu')return;
   keysDown[e.code]=true;
+  if(document.getElementById('lobbyJoin').style.display!=='none'&&e.code==='Enter'){e.preventDefault();joinRoom();return;}
   if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();jump();}
   else if(e.code==='KeyJ'||e.code==='Enter'){e.preventDefault();if(gameState==='tutorial'||gameState==='playing')shoot();}
   if(e.code==="KeyA"||e.code==="ArrowLeft"||e.code==="KeyD"||e.code==="ArrowRight"){e.preventDefault();}
@@ -815,8 +1070,10 @@ canvas.addEventListener('click',(e)=>{
   const r=canvas.getBoundingClientRect();
   mouseX=(e.clientX-r.left)*(W/r.width);mouseY=(e.clientY-r.top)*(H/r.height);
   if(gameState==='menu'){
-    const btnX=W/2-130,btnY=170,btnW=260,btnH=56;
+    const btnX=W/2-130,btnY=140,btnW=260,btnH=50;
+    const mpBtnY=btnY+62;
     if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>btnY&&mouseY<btnY+btnH)startGame();
+    else if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>mpBtnY&&mouseY<mpBtnY+btnH)showLobby();
   }else if(gameState==='tutorial'){
     const cbx=W/2-90,cby=370-50,cbw=180,cbh=36;
     if(mouseX>cbx&&mouseX<cbx+cbw&&mouseY>cby&&mouseY<cby+cbh)closeTutorial();
@@ -829,8 +1086,10 @@ canvas.addEventListener('touchstart',(e)=>{
   e.preventDefault();const r=canvas.getBoundingClientRect();
   const sx=W/r.width,sy=H/r.height;
   mouseX=(e.touches[0].clientX-r.left)*sx;mouseY=(e.touches[0].clientY-r.top)*sy;
-  if(gameState==='menu'){const btnX=W/2-130,btnY=170,btnW=260,btnH=56;
-    if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>btnY&&mouseY<btnY+btnH)startGame();}
+  if(gameState==='menu'){const btnX=W/2-130,btnY=140,btnW=260,btnH=50;
+    const mpBtnY=btnY+62;
+    if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>btnY&&mouseY<btnY+btnH)startGame();
+    else if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>mpBtnY&&mouseY<mpBtnY+btnH)showLobby();}
   else if(gameState==='tutorial'){const cbx=W/2-90,cby=370-50,cbw=180,cbh=36;
     if(mouseX>cbx&&mouseX<cbx+cbw&&mouseY>cby&&mouseY<cby+cbh)closeTutorial();}
   else if(gameState==='playing'){if(mouseY<H*0.4)jump();else if(mouseY>H*0.65)shoot();
@@ -838,7 +1097,13 @@ canvas.addEventListener('touchstart',(e)=>{
 });
 canvas.addEventListener('touchend',()=>{dino.crouching=false;});
 
-function restartGame(){gameState='menu';}
+function restartGame(){
+  if(multiplayerMode&&socket){socket.disconnect();socket=null;}
+  gameState='menu';multiplayerMode=false;remotePlayer=null;
+  document.getElementById('hintBar').style.display='';
+  document.getElementById('scoreboard').style.display='';
+  document.getElementById('remoteScoreSpan').style.display='none';
+}
 
 // ========== 启动 ==========
 initMenuParticles();initClouds();gameLoop();
