@@ -275,7 +275,7 @@ function showCreatePanel() {
   document.getElementById('lobbyWaiting').style.display = 'none';
   dinoColorIdx = 0; isHost = true;
   buildColorPicker('createColorPicker', 0);
-  initSocket(); socket.emit('create-room');
+  socket.emit('create-room');
 }
 
 function showJoinPanel() {
@@ -317,6 +317,7 @@ function closeLobby() {
 function showLobby() {
   document.getElementById('lobbyOverlay').classList.add('show');
   showMainPanel();
+  initSocket(); // 预连接，加速后续操作
 }
 
 function requestStartGame() {
