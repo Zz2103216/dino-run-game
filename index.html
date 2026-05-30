@@ -71,6 +71,7 @@
     <span class="shield">🛡️ 护盾: <span id="hp">0</span></span>
     <span>🦅 击杀: <span id="kills">0</span></span>
     <span class="remote-score" id="remoteScoreSpan" style="display:none">👤 <span id="remoteName">对手</span>: <span id="remoteScore">0</span></span>
+    <span class="room-code-display" id="roomCodeDisplayInGame" style="display:none">🏠 房间 <b id="roomCodeGame">----</b></span>
   </div>
   <canvas id="game" width="960" height="400"></canvas>
 
@@ -274,7 +275,6 @@ function closeLobby() {
 }
 
 function showLobby() {
-  initSocket();
   document.getElementById('lobbyOverlay').classList.add('show');
   showMainPanel();
 }
@@ -995,7 +995,7 @@ function draw(){
   if(bossActive&&boss)drawBoss(boss);for(const bp of bossProjectiles)drawBullet(bp);
   for(const p of particles){ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);}ctx.globalAlpha=1;
   if(gameState==='playing')drawCrosshair();
-  // 联机：更新对手分数显示
+  // 联机：更新对手分数和房间号显示
   if(multiplayerMode&&remotePlayer){
     const rss=document.getElementById('remoteScoreSpan');
     rss.style.display='';
@@ -1003,6 +1003,13 @@ function draw(){
     document.getElementById('remoteScore').textContent=remotePlayer.score||0;
   } else {
     document.getElementById('remoteScoreSpan').style.display='none';
+  }
+  if(multiplayerMode&&roomCode){
+    const rcd=document.getElementById('roomCodeDisplayInGame');
+    rcd.style.display='';
+    document.getElementById('roomCodeGame').textContent=roomCode;
+  } else {
+    document.getElementById('roomCodeDisplayInGame').style.display='none';
   }
   if(bossActive&&boss&&(boss.state==='entering'||boss.state==='fighting')){const barW=240,barH=14,barX=W/2-barW/2,barY=10;
     ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(barX-2,barY-2,barW+4,barH+4);ctx.fillStyle='#333';ctx.fillRect(barX,barY,barW,barH);
