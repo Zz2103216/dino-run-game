@@ -30,8 +30,10 @@ io.on('connection', (socket) => {
   console.log(`[连接] ${socket.id}`);
 
   // 创建房间
-  socket.on('create-room', () => {
-    const code = generateRoomCode();
+  socket.on('create-room', (proposedCode) => {
+    // 优先使用客户端生成的房间号，冲突时服务端另生成
+    let code = proposedCode && /^\d{4}$/.test(proposedCode) && !rooms[proposedCode] ? proposedCode : null;
+    if (!code) code = generateRoomCode();
     rooms[code] = {
       players: [{ id: socket.id, name: '', colorIdx: 0, score: 0, kills: 0, alive: true, isHost: true }],
       state: 'waiting'

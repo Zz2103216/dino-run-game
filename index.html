@@ -232,8 +232,11 @@ function initSocket() {
   socket = io();
   socket.on('connect', () => {});
   socket.on('room-created', (data) => {
-    roomCode = data.code;
-    document.getElementById('roomCodeDisplay').textContent = roomCode;
+    // 服务端确认房间号（极少情况下会与客户端生成的不同）
+    if (data.code !== roomCode) {
+      roomCode = data.code;
+      document.getElementById('roomCodeDisplay').textContent = roomCode;
+    }
     renderPlayerList(data.players || [], 'createPlayerList', true);
     updateStartButton(data.players || []);
   });
@@ -275,7 +278,10 @@ function showCreatePanel() {
   document.getElementById('lobbyWaiting').style.display = 'none';
   dinoColorIdx = 0; isHost = true;
   buildColorPicker('createColorPicker', 0);
-  socket.emit('create-room');
+  // 客户端立即生成房间号，秒显
+  roomCode = String(Math.floor(1000 + Math.random() * 9000));
+  document.getElementById('roomCodeDisplay').textContent = roomCode;
+  socket.emit('create-room', roomCode);
 }
 
 function showJoinPanel() {
