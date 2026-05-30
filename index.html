@@ -70,7 +70,7 @@
     <span class="ammo">🔫 弹药: <span id="ammo">3</span></span>
     <span class="shield">🛡️ 护盾: <span id="hp">0</span></span>
     <span>🦅 击杀: <span id="kills">0</span></span>
-    <span class="remote-score" id="remoteScoreSpan" style="display:none">👤 对手: <span id="remoteScore">0</span></span>
+    <span class="remote-score" id="remoteScoreSpan" style="display:none">👤 <span id="remoteName">对手</span>: <span id="remoteScore">0</span></span>
   </div>
   <canvas id="game" width="960" height="400"></canvas>
 
@@ -428,47 +428,49 @@ function drawMenu() {
   ctx.fillStyle = '#888'; ctx.font = '16px sans-serif';
   ctx.fillText('DINO COMMANDO · 像素风跑酷射击', W/2, titleY+82);
 
-  // 单人游戏按钮
-  const btnX = W/2-130, btnY = 140, btnW = 260, btnH = 50;
-  const hover = mouseX>btnX && mouseX<btnX+btnW && mouseY>btnY && mouseY<btnY+btnH;
-  const pulse = 1+Math.sin(menuFrame*0.06)*0.03;
+  // 双按钮：单人游戏 + 双人游戏（图标卡片式）
+  const cardW = 180, cardH = 140, gap = 30;
+  const card1X = W/2 - cardW - gap/2, card2X = W/2 + gap/2, cardY = 145;
+  const hov1 = mouseX>card1X && mouseX<card1X+cardW && mouseY>cardY && mouseY<cardY+cardH;
+  const hov2 = mouseX>card2X && mouseX<card2X+cardW && mouseY>cardY && mouseY<cardY+cardH;
+  const pulse = 1 + Math.sin(menuFrame*0.05)*0.03;
 
-  ctx.fillStyle = 'rgba(233,69,96,0.3)';
-  ctx.beginPath(); roundRect(btnX+3,btnY+3,btnW,btnH,18); ctx.fill();
+  function drawCard(cx, cy, w, h, icon, title, hovered, gradStart, gradEnd) {
+    const s = hovered ? 1.04 : 1;
+    ctx.save(); ctx.translate(cx + w/2, cy + h/2); ctx.scale(s, s); ctx.translate(-w/2, -h/2);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); roundRect(4, 4, w, h, 16); ctx.fill();
+    // card bg
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, hovered ? gradEnd : gradStart);
+    g.addColorStop(1, hovered ? gradStart : gradEnd);
+    ctx.fillStyle = g;
+    ctx.beginPath(); roundRect(0, 0, w, h, 16); ctx.fill();
+    ctx.strokeStyle = hovered ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); roundRect(0, 0, w, h, 16); ctx.stroke(); ctx.lineWidth = 1;
+    // icon
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.round(36*pulse)}px sans-serif`; ctx.textAlign = 'center';
+    ctx.fillText(icon, w/2, 52);
+    // title
+    ctx.font = `bold ${Math.round(18)}px sans-serif`;
+    ctx.fillText(title, w/2, 90);
+    // subtitle
+    ctx.fillStyle = hovered ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(hovered ? (title==='单人游戏'?'经典跑酷射击':'好友实时对战') : '', w/2, 112);
+    ctx.restore();
+  }
 
-  const bgG = ctx.createLinearGradient(btnX,btnY,btnX,btnY+btnH);
-  bgG.addColorStop(0, hover?'#ff6b6b':'#e94560');
-  bgG.addColorStop(1, hover?'#e94560':'#c0392b');
-  ctx.fillStyle = bgG;
-  ctx.beginPath(); roundRect(btnX,btnY,btnW,btnH,18); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
-  ctx.beginPath(); roundRect(btnX,btnY,btnW,btnH,18); ctx.stroke(); ctx.lineWidth = 1;
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${Math.round(22*pulse)}px sans-serif`;
-  ctx.fillText('⚡ 单人游戏', W/2, btnY+34);
+  drawCard(card1X, cardY, cardW, cardH, '🦖', '单人游戏', hov1, '#e94560', '#c0392b');
+  drawCard(card2X, cardY, cardW, cardH, '🌐', '双人游戏', hov2, '#1976d2', '#0d47a1');
 
-  // 联机对战按钮
-  const mpBtnY = btnY + 62, mpHover = mouseX>btnX && mouseX<btnX+btnW && mouseY>mpBtnY && mouseY<mpBtnY+btnH;
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`👑 最高分: ${bestScore}`, W/2, cardY+cardH+38);
+  if(bestScore>0){ctx.fillStyle='#888';ctx.font='14px sans-serif';ctx.fillText('打破你的记录吧！',W/2,cardY+cardH+60);}
 
-  ctx.fillStyle = 'rgba(79,195,247,0.3)';
-  ctx.beginPath(); roundRect(btnX+3,mpBtnY+3,btnW,btnH,18); ctx.fill();
-
-  const mpBgG = ctx.createLinearGradient(btnX,mpBtnY,btnX,mpBtnY+btnH);
-  mpBgG.addColorStop(0, mpHover?'#4fc3f7':'#29b6f6');
-  mpBgG.addColorStop(1, mpHover?'#29b6f6':'#0288d1');
-  ctx.fillStyle = mpBgG;
-  ctx.beginPath(); roundRect(btnX,mpBtnY,btnW,btnH,18); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2;
-  ctx.beginPath(); roundRect(btnX,mpBtnY,btnW,btnH,18); ctx.stroke(); ctx.lineWidth = 1;
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${Math.round(22*pulse)}px sans-serif`;
-  ctx.fillText('🌐 联机对战', W/2, mpBtnY+34);
-
-  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px sans-serif';
-  ctx.fillText(`👑 最高分: ${bestScore}`, W/2, mpBtnY+76);
-  if(bestScore>0){ctx.fillStyle='#888';ctx.font='14px sans-serif';ctx.fillText('打破你的记录吧！',W/2,mpBtnY+98);}
-
-  const gy = mpBtnY+118;
+  const gy = cardY+cardH+78;
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.beginPath(); roundRect(W/2-320,gy-8,640,90,14); ctx.fill();
   ctx.fillStyle = '#aaa'; ctx.font = '13px sans-serif';
@@ -997,6 +999,7 @@ function draw(){
   if(multiplayerMode&&remotePlayer){
     const rss=document.getElementById('remoteScoreSpan');
     rss.style.display='';
+    document.getElementById('remoteName').textContent=remotePlayer.name||'对手';
     document.getElementById('remoteScore').textContent=remotePlayer.score||0;
   } else {
     document.getElementById('remoteScoreSpan').style.display='none';
@@ -1012,12 +1015,13 @@ function draw(){
     ctx.fillStyle='#2d2d2d';ctx.font='bold 40px sans-serif';ctx.textAlign='center';
     if(multiplayerMode){
       const rp = remotePlayer||{};
+      const oppName = rp.name || '对手';
       const opponentAlive = rp.alive !== false;
       const opponentScore = rp.score || 0;
       if(opponentAlive){
         ctx.fillText('😵 你输了！',W/2,H/2-15);
         ctx.font='17px sans-serif';ctx.fillStyle='#aaa';
-        ctx.fillText(`对手仍在奔跑... 对方分数: ${opponentScore}`,W/2,H/2+15);
+        ctx.fillText(`${oppName} 仍在奔跑... 对方分数: ${opponentScore}`,W/2,H/2+15);
       }else if(score > opponentScore){
         ctx.fillText('🏆 你赢了！',W/2,H/2-15);
       }else if(score < opponentScore){
@@ -1026,7 +1030,7 @@ function draw(){
         ctx.fillText('🤝 平局！',W/2,H/2-15);
       }
       ctx.font='17px sans-serif';ctx.fillStyle='#999';
-      ctx.fillText(`你: ${score}分 ${kills}杀  |  对手: ${opponentScore}分 ${rp.kills||0}杀`,W/2,H/2+25);
+      ctx.fillText(`你: ${score}分 ${kills}杀  |  ${oppName}: ${opponentScore}分 ${rp.kills||0}杀`,W/2,H/2+25);
     }else{
       ctx.fillText('💥 GAME OVER',W/2,H/2-15);
       ctx.font='17px sans-serif';ctx.fillStyle='#999';
@@ -1070,10 +1074,9 @@ canvas.addEventListener('click',(e)=>{
   const r=canvas.getBoundingClientRect();
   mouseX=(e.clientX-r.left)*(W/r.width);mouseY=(e.clientY-r.top)*(H/r.height);
   if(gameState==='menu'){
-    const btnX=W/2-130,btnY=140,btnW=260,btnH=50;
-    const mpBtnY=btnY+62;
-    if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>btnY&&mouseY<btnY+btnH)startGame();
-    else if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>mpBtnY&&mouseY<mpBtnY+btnH)showLobby();
+    const cardW=180,cardH=140,gap=30,card1X=W/2-cardW-gap/2,card2X=W/2+gap/2,cardY=145;
+    if(mouseX>card1X&&mouseX<card1X+cardW&&mouseY>cardY&&mouseY<cardY+cardH)startGame();
+    else if(mouseX>card2X&&mouseX<card2X+cardW&&mouseY>cardY&&mouseY<cardY+cardH)showLobby();
   }else if(gameState==='tutorial'){
     const cbx=W/2-90,cby=370-50,cbw=180,cbh=36;
     if(mouseX>cbx&&mouseX<cbx+cbw&&mouseY>cby&&mouseY<cby+cbh)closeTutorial();
@@ -1086,10 +1089,9 @@ canvas.addEventListener('touchstart',(e)=>{
   e.preventDefault();const r=canvas.getBoundingClientRect();
   const sx=W/r.width,sy=H/r.height;
   mouseX=(e.touches[0].clientX-r.left)*sx;mouseY=(e.touches[0].clientY-r.top)*sy;
-  if(gameState==='menu'){const btnX=W/2-130,btnY=140,btnW=260,btnH=50;
-    const mpBtnY=btnY+62;
-    if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>btnY&&mouseY<btnY+btnH)startGame();
-    else if(mouseX>btnX&&mouseX<btnX+btnW&&mouseY>mpBtnY&&mouseY<mpBtnY+btnH)showLobby();}
+  if(gameState==='menu'){const cardW=180,cardH=140,gap=30,card1X=W/2-cardW-gap/2,card2X=W/2+gap/2,cardY=145;
+    if(mouseX>card1X&&mouseX<card1X+cardW&&mouseY>cardY&&mouseY<cardY+cardH)startGame();
+    else if(mouseX>card2X&&mouseX<card2X+cardW&&mouseY>cardY&&mouseY<cardY+cardH)showLobby();}
   else if(gameState==='tutorial'){const cbx=W/2-90,cby=370-50,cbw=180,cbh=36;
     if(mouseX>cbx&&mouseX<cbx+cbw&&mouseY>cby&&mouseY<cby+cbh)closeTutorial();}
   else if(gameState==='playing'){if(mouseY<H*0.4)jump();else if(mouseY>H*0.65)shoot();
