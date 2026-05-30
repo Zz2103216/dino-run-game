@@ -118,7 +118,7 @@
   </div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script src="/socket.io.js"></script>
 <script>
 /* ================================================
    广告配置 — 接入 Google AdSense 后替换下方占位
@@ -229,6 +229,10 @@ function updateStartButton(players) {
 
 function initSocket() {
   if (socket) return;
+  if (typeof io === 'undefined') {
+    alert('Socket.IO 未加载，请检查网络连接后刷新页面');
+    return;
+  }
   socket = io();
   socket.on('connect', () => {});
   socket.on('room-created', (data) => {
@@ -281,6 +285,7 @@ function showCreatePanel() {
   // 客户端立即生成房间号，秒显
   roomCode = String(Math.floor(1000 + Math.random() * 9000));
   document.getElementById('roomCodeDisplay').textContent = roomCode;
+  if (!socket) { document.getElementById('roomCodeDisplay').textContent = '----'; return; }
   socket.emit('create-room', roomCode);
 }
 
@@ -311,6 +316,7 @@ function joinRoom() {
   if (!name) { document.getElementById('joinError').textContent = '请输入你的名称'; return; }
   playerName = name;
   initSocket();
+  if (!socket) { document.getElementById('joinError').textContent = '连接失败，请刷新页面'; return; }
   socket.emit('join-room', { code, name, colorIdx: dinoColorIdx });
 }
 

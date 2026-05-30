@@ -7,6 +7,8 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static(__dirname));
+// 本地提供 Socket.IO 客户端，不依赖外部 CDN
+app.use('/socket.io.js', express.static(require('path').join(__dirname, 'node_modules/socket.io/client-dist/socket.io.min.js')));
 
 // 房间管理
 const rooms = {}; // { code: { players: [{id, name, colorIdx, score, kills, alive, isHost}], state } }
