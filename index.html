@@ -1109,6 +1109,9 @@ function triggerBoss(){
     wingUp:false,flashTimer:0,mouthOpen:false,
     shootTimer:Math.max(20,70-bossLevel*8),shootCooldown:0,moveTimer:0};
   obstacles=[];
+  // 开局给两颗子弹补给
+  spawnAmmoPickup(); ammoPickups[ammoPickups.length-1].x = W/2 + 100;
+  spawnAmmoPickup(); ammoPickups[ammoPickups.length-1].x = W/2 + 250;
 }
 function bossShoot(){
   const b=boss;if(!b)return;b.shootCooldown=b.shootTimer;b.mouthOpen=true;
@@ -1252,8 +1255,12 @@ function update(){
   if(frameCount%200===0)speed+=0.3;
   if(!bossActive&&score>=nextBossScore&&!gameOver)triggerBoss();
   if(!bossActive&&frameCount%Math.max(40,90-score*0.5)===0)spawnObstacle();
-  if(!bossActive){pickupSpawnTimer++;
-    if(pickupSpawnTimer>=250+Math.random()*150&&ammoPickups.length<3){pickupSpawnTimer=0;spawnAmmoPickup();}}
+  pickupSpawnTimer++;
+  if(bossActive){
+    if(pickupSpawnTimer>=100+Math.random()*80&&ammoPickups.length<5){pickupSpawnTimer=0;spawnAmmoPickup();}
+  }else{
+    if(pickupSpawnTimer>=250+Math.random()*150&&ammoPickups.length<3){pickupSpawnTimer=0;spawnAmmoPickup();}
+  }
   for(const cloud of clouds){cloud.x-=cloud.speed;if(cloud.x<-80){cloud.x=W+50;cloud.y=30+Math.random()*80;}}
   for(let i=bullets.length-1;i>=0;i--){bullets[i].x+=bullets[i].vx;bullets[i].y+=bullets[i].vy;
     if(bullets[i].x<-20||bullets[i].x>W+20||bullets[i].y<-20||bullets[i].y>H+20){bullets.splice(i,1);continue;}
