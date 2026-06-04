@@ -901,13 +901,124 @@ function drawAmmoPickup(p){
   ctx.beginPath();ctx.arc(0,bob,14,0,Math.PI*2);ctx.fill();
   ctx.restore();
 }
-function drawCactus(ox,oy,wh,hh){
-  const cx=ox+wh/2;
-  ctx.fillStyle='#2d8a4e';ctx.fillRect(cx-6,oy-hh,12,hh);
-  ctx.fillRect(cx-14,oy-hh*0.75,8,hh*0.4);ctx.fillRect(cx-14,oy-hh*0.75-6,8,8);
-  ctx.fillRect(cx+6,oy-hh*0.6,8,hh*0.35);ctx.fillRect(cx+6,oy-hh*0.6-6,8,8);
-  ctx.fillStyle='#1a6b35';ctx.fillRect(cx-8,oy-hh*0.4,2,6);ctx.fillRect(cx+6,oy-hh*0.3,2,6);
+function drawRock(ox, oy, w, h) {
+  const cx = ox + w/2, rx = Math.round(ox), ry = Math.round(oy);
+  // Main rock body (dark gray, irregular)
+  ctx.fillStyle = '#5a5a5a';
+  ctx.beginPath(); ctx.moveTo(cx-4, ry-h);
+  ctx.lineTo(cx-12, ry-h+8); ctx.lineTo(cx-14, ry-h*0.55);
+  ctx.lineTo(cx-10, ry-h*0.2); ctx.lineTo(cx-2, ry);
+  ctx.lineTo(cx+6, ry-h*0.15); ctx.lineTo(cx+10, ry-h*0.5);
+  ctx.lineTo(cx+6, ry-h*0.85); ctx.lineTo(cx+2, ry-h+6);
+  ctx.fill();
+  // Rock highlight (lighter top-left)
+  ctx.fillStyle = '#7a7a7a';
+  ctx.beginPath(); ctx.moveTo(cx-2, ry-h+2);
+  ctx.lineTo(cx-10, ry-h+10); ctx.lineTo(cx-12, ry-h*0.55);
+  ctx.lineTo(cx-8, ry-h*0.35); ctx.lineTo(cx-1, ry-h*0.1);
+  ctx.fill();
+  // Rock shadow (darker bottom-right)
+  ctx.fillStyle = '#3a3a3a';
+  ctx.beginPath(); ctx.moveTo(cx, ry-h*0.15);
+  ctx.lineTo(cx+8, ry-h*0.4); ctx.lineTo(cx+4, ry-h*0.8);
+  ctx.lineTo(cx, ry-h*0.3);
+  ctx.fill();
+  // Detail cracks
+  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx-6, ry-h*0.6); ctx.lineTo(cx-2, ry-h*0.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+2, ry-h*0.7); ctx.lineTo(cx+6, ry-h*0.55); ctx.stroke();
+  // Small moss accent
+  ctx.fillStyle = '#3d6b3d';
+  ctx.fillRect(cx-6, ry-h*0.25, 5, 4);
+  ctx.fillStyle = '#2d5a2d';
+  ctx.fillRect(cx-5, ry-h*0.2, 3, 3);
 }
+
+function drawCar(ox, oy, t) {
+  const rx = Math.round(ox), ry = Math.round(oy);
+  const carW = 70, carH = 50, carY = ry - carH;
+  ctx.save();
+  // Car body (rusty red/brown)
+  const bodyGrad = ctx.createLinearGradient(rx, carY, rx, ry);
+  bodyGrad.addColorStop(0, '#8b3a3a');
+  bodyGrad.addColorStop(0.5, '#6b2020');
+  bodyGrad.addColorStop(1, '#4a1515');
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(rx, carY + 8, carW, carH - 8);
+  // Car roof
+  ctx.fillStyle = '#6b2828';
+  ctx.fillRect(rx + 16, carY, 38, 16);
+  ctx.fillStyle = '#7a3030';
+  ctx.fillRect(rx + 18, carY + 2, 34, 12);
+  // Windows (broken)
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(rx + 20, carY + 4, 14, 8);
+  ctx.fillRect(rx + 36, carY + 4, 14, 8);
+  // Window crack
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(rx + 27, carY + 4); ctx.lineTo(rx + 24, carY + 10); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rx + 24, carY + 10); ctx.lineTo(rx + 30, carY + 8); ctx.stroke();
+  // Rust spots
+  ctx.fillStyle = '#5a3020';
+  ctx.fillRect(rx + 8, carY + 20, 6, 4);
+  ctx.fillRect(rx + 50, carY + 28, 8, 5);
+  ctx.fillRect(rx + 60, carY + 14, 5, 4);
+  // Bumper (bent)
+  ctx.fillStyle = '#888'; ctx.fillRect(rx - 4, ry - 6, 8, 6);
+  ctx.fillStyle = '#666'; ctx.fillRect(rx - 2, ry - 4, 4, 4);
+  // Wheels (flat/deflated)
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath(); ctx.ellipse(rx + 12, ry - 2, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(rx + 52, ry - 2, 10, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.arc(rx + 12, ry - 2, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(rx + 52, ry - 2, 4, 0, Math.PI * 2); ctx.fill();
+  // Hubcap
+  ctx.fillStyle = '#555';
+  ctx.beginPath(); ctx.arc(rx + 12, ry - 2, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(rx + 52, ry - 2, 2, 0, Math.PI * 2); ctx.fill();
+
+  // ===== SMOKE ANIMATION (rising from engine) =====
+  const smokePhase = Math.sin(t * 0.06) * 0.5 + 0.5;
+  const smokeY1 = carY + 6 - (t % 40) * 0.5;
+  const smokeY2 = carY + 2 - ((t + 15) % 40) * 0.6;
+  const smokeY3 = carY + 4 - ((t + 28) % 40) * 0.4;
+  ctx.fillStyle = `rgba(120,120,120,${0.3 + smokePhase * 0.2})`;
+  ctx.beginPath(); ctx.arc(rx + 5, smokeY1, 6 + smokePhase * 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(rx + 2, smokeY2, 4 + smokePhase * 2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = `rgba(100,100,100,${0.2 + smokePhase * 0.15})`;
+  ctx.beginPath(); ctx.arc(rx + 8, smokeY3, 8 + smokePhase * 4, 0, Math.PI * 2); ctx.fill();
+
+  // ===== FIRE ANIMATION (flickering on engine) =====
+  const firePhase = Math.sin(t * 0.15) * 0.5 + 0.5;
+  const firePhase2 = Math.cos(t * 0.2 + 1) * 0.5 + 0.5;
+  // Inner flame (bright yellow/white)
+  ctx.fillStyle = `rgba(255,255,150,${0.7 + firePhase * 0.3})`;
+  ctx.beginPath(); ctx.moveTo(rx + 4, carY + 8);
+  ctx.lineTo(rx + 0, carY + 8 - 4 - firePhase * 6);
+  ctx.lineTo(rx + 8, carY + 8 - 4 - firePhase2 * 5);
+  ctx.lineTo(rx + 12, carY + 8);
+  ctx.fill();
+  // Outer flame (orange)
+  ctx.fillStyle = `rgba(255,120,20,${0.5 + firePhase * 0.3})`;
+  ctx.beginPath(); ctx.moveTo(rx + 2, carY + 8);
+  ctx.lineTo(rx - 2, carY + 8 - 8 - firePhase * 8);
+  ctx.lineTo(rx + 6, carY + 8 - 10 - firePhase2 * 6);
+  ctx.lineTo(rx + 14, carY + 8 - 5 - firePhase * 4);
+  ctx.lineTo(rx + 16, carY + 8);
+  ctx.fill();
+  // Smoke above fire
+  ctx.fillStyle = `rgba(60,60,60,${0.4 + firePhase * 0.2})`;
+  ctx.beginPath(); ctx.arc(rx + 6, carY + 6 - 12 - firePhase * 5, 5, 0, Math.PI * 2); ctx.fill();
+  // Small embers
+  ctx.fillStyle = `rgba(255,180,50,${0.6 + firePhase2 * 0.4})`;
+  ctx.fillRect(rx + 4, carY + 4 - firePhase * 8, 2, 2);
+  ctx.fillStyle = `rgba(255,100,20,${0.5 + firePhase * 0.5})`;
+  ctx.fillRect(rx + 10, carY + 6 - firePhase2 * 7, 2, 2);
+
+  ctx.restore();
+}
+
 function drawBarbwire(ox, oy, ow, oh) {
   const x = Math.round(ox), y = Math.round(oy);
   // 主铁丝横线
@@ -1056,7 +1167,7 @@ function spawnObstacle(){
     if(Math.random()<0.5)obstacles.push({x:W,y:GROUND_Y-44,ow:80+Math.random()*40,oh:16,type:'barbwire'});
     else obstacles.push({x:W,y:GROUND_Y-46,ow:70+Math.random()*50,oh:20,type:'beam'});
   }
-  else{const oh=30+Math.random()*30;obstacles.push({x:W,y:GROUND_Y,w:20+Math.random()*10,h:oh,type:'cactus'});}
+  else{const roll2=Math.random();if(roll2<0.12&&score>30){obstacles.push({x:W,y:GROUND_Y,w:70,h:135,type:'car',carTimer:0});}else{const oh=30+Math.random()*30;obstacles.push({x:W,y:GROUND_Y,w:20+Math.random()*10,h:oh,type:'rock'});}}
 }
 function shoot(){
   if(gameState!=='playing'||gameOver||ammo<=0)return;
@@ -1170,10 +1281,11 @@ function update(){
       }
     }
     else{obs.x-=speed;if(obs.x+obs.w<-20){obstacles.splice(i,1);continue;}
-      if(rectsOverlap(getDinoHitbox(),{x:obs.x+6,y:obs.y-obs.h+4,w:obs.w-12,h:obs.h-8})){if(invincible){obstacles.splice(i,1);continue;}endGame();return;}}}
+      if(obs.type==='car'){if(rectsOverlap(getDinoHitbox(),{x:obs.x+4,y:obs.y-135+8,w:obs.w-8,h:130})){if(invincible){obstacles.splice(i,1);continue;}endGame();return;}}
+      else if(rectsOverlap(getDinoHitbox(),{x:obs.x+6,y:obs.y-obs.h+4,w:obs.w-12,h:obs.h-8})){if(invincible){obstacles.splice(i,1);continue;}endGame();return;}}}
   updateBoss();updateBossProjectiles();if(gameOver)return;
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.3;p.life-=p.decay;if(p.life<=0)particles.splice(i,1);}
-  for(const obs of obstacles){if((obs.type==='cactus'||obs.type==='barbwire'||obs.type==='beam')&&obs.x+(obs.ow||obs.w)<dino.x&&!obs.passed){obs.passed=true;score++;document.getElementById('score').textContent=score;}}
+  for(const obs of obstacles){if((obs.type==='rock'||obs.type==='car'||obs.type==='barbwire'||obs.type==='beam')&&obs.x+(obs.ow||obs.w)<dino.x&&!obs.passed){obs.passed=true;score++;document.getElementById('score').textContent=score;}}
   if(multiplayerMode) sendPlayerState();
 }
 
@@ -1195,7 +1307,8 @@ function draw(){
     if(obs.type==='eagle')drawEagle(obs.x,obs.y,obs.w,obs.h,obs.wingUp);
     else if(obs.type==='barbwire')drawBarbwire(Math.round(obs.x),Math.round(obs.y),obs.ow,obs.oh);
     else if(obs.type==='beam')drawBeam(Math.round(obs.x),Math.round(obs.y),obs.ow,obs.oh);
-    else drawCactus(Math.round(obs.x),Math.round(obs.y),obs.w,obs.h);
+    else if(obs.type==='car'){obs.carTimer++;drawCar(obs.x,obs.y,obs.carTimer);}
+    else drawRock(Math.round(obs.x),Math.round(obs.y),obs.w,obs.h);
   }
   for(const pk of ammoPickups)drawAmmoPickup(pk);
   for(const b of bullets)drawBullet(b);
