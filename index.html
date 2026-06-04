@@ -658,10 +658,12 @@ function drawRemotePlayer() {
   const s = '#999', sD = '#777', hairR = '#555', shirtR = '#666', pantsR = '#555', bootsR = '#4a4a4a';
   if (rc) {
     const ch = h*0.55;
-    ctx.fillStyle = s; ctx.fillRect(14,4,16,10);
-    ctx.fillStyle = hairR; ctx.fillRect(12,2,20,6);
-    ctx.fillStyle = shirtR; ctx.fillRect(12,14,20,9);
-    ctx.fillStyle = pantsR; ctx.fillRect(14,23,8,5); ctx.fillRect(24,23,8,5);
+    // Simple prone: boots, legs, body, head (gray tones)
+    ctx.fillStyle = bootsR; ctx.fillRect(2, 10, 8, 5); ctx.fillRect(6, 15, 8, 5);
+    ctx.fillStyle = pantsR; ctx.fillRect(8, 10, 8, 7); ctx.fillRect(12, 15, 8, 7);
+    ctx.fillStyle = shirtR; ctx.fillRect(16, 8, 22, 16);
+    ctx.fillStyle = hairR; ctx.fillRect(32, 0, 12, 6);
+    ctx.fillStyle = s; ctx.fillRect(32, 4, 12, 12);
   } else {
     ctx.fillStyle = hairR; ctx.fillRect(10,-2,24,8);
     ctx.fillStyle = s; ctx.fillRect(12,4,20,16);
@@ -703,36 +705,60 @@ function drawPlayer() {
   const aimAngle = Math.atan2(mouseY - gunBaseY, mouseX - (x+44));
 
   if (crouching) {
-    // ===== CROUCHING POSE =====
+    // ===== PRONE POSE (趴地射击) =====
     const ch = h*0.55; ctx.translate(x, y-ch);
-    // Hair (back)
-    ctx.fillStyle = H; ctx.fillRect(10, 0, 24, 8);
-    // Head
-    ctx.fillStyle = S; ctx.fillRect(12, 4, 20, 12);
-    // Hair top
-    ctx.fillStyle = Hl; ctx.fillRect(14, 2, 16, 4);
-    // Eyes (squinting)
-    ctx.fillStyle = Ey; ctx.fillRect(16, 8, 4, 2); ctx.fillRect(24, 8, 4, 2);
-    ctx.fillStyle = Ep; ctx.fillRect(17, 8, 2, 2); ctx.fillRect(25, 8, 2, 2);
-    // Mouth
-    ctx.fillStyle = Sd; ctx.fillRect(19, 13, 6, 2);
-    // Body (compressed)
-    ctx.fillStyle = A; ctx.fillRect(10, 16, 24, 9);
-    ctx.fillStyle = Ad; ctx.fillRect(12, 22, 20, 2);
-    // Left arm
-    ctx.fillStyle = S; ctx.fillRect(2, 17, 8, 8);
-    ctx.fillStyle = A; ctx.fillRect(4, 16, 6, 8);
-    // Gun (right arm + weapon)
-    ctx.save(); ctx.translate(34, 20); ctx.rotate(aimAngle);
-    ctx.fillStyle = Gm; ctx.fillRect(0, -2, 10, 4);
-    ctx.fillStyle = Gl; ctx.fillRect(0, -3, 8, 2);
-    ctx.fillStyle = '#333'; ctx.fillRect(8, -2, 3, 3);
-    if(muzzleFlash>0){ctx.fillStyle=`rgba(255,200,50,${muzzleFlash})`;ctx.fillRect(10,-3,8,6);}
+    // --- LEGS (far left, flat on ground) ---
+    // Left boot
+    ctx.fillStyle = B; ctx.fillRect(2, 10, 8, 6);
+    ctx.fillStyle = Bd; ctx.fillRect(2, 15, 8, 2);
+    // Right boot (slightly offset)
+    ctx.fillStyle = B; ctx.fillRect(6, 16, 8, 6);
+    ctx.fillStyle = Bd; ctx.fillRect(6, 21, 8, 2);
+    // Pants (legs behind)
+    ctx.fillStyle = P; ctx.fillRect(8, 10, 8, 8);
+    ctx.fillStyle = Pd; ctx.fillRect(14, 14, 4, 4);
+    ctx.fillStyle = P; ctx.fillRect(12, 16, 8, 8);
+
+    // --- BODY (flat on ground, angled slightly) ---
+    ctx.fillStyle = A; ctx.fillRect(16, 8, 22, 16);
+    // Body armor ridge
+    ctx.fillStyle = Ad; ctx.fillRect(18, 10, 18, 2);
+    // Belt (visible on back)
+    ctx.fillStyle = '#5a3a20'; ctx.fillRect(18, 20, 16, 2);
+
+    // --- LEFT ARM (support elbow, under body) ---
+    ctx.fillStyle = S; ctx.fillRect(14, 8, 6, 6);
+    ctx.fillStyle = Sd; ctx.fillRect(12, 12, 4, 3);
+
+    // --- HEAD (raised slightly, facing right) ---
+    // Helmet (back)
+    ctx.fillStyle = H; ctx.fillRect(32, 0, 12, 8);
+    ctx.fillStyle = Hl; ctx.fillRect(34, 0, 8, 4);
+    // Face
+    ctx.fillStyle = S; ctx.fillRect(32, 4, 12, 12);
+    // Eyes (determined squint)
+    ctx.fillStyle = Ey; ctx.fillRect(36, 8, 3, 2);
+    ctx.fillStyle = Ep; ctx.fillRect(37, 8, 2, 2);
+    // Eyebrow
+    ctx.fillStyle = H; ctx.fillRect(36, 6, 5, 2);
+    // Mouth (gritting)
+    ctx.fillStyle = Sd; ctx.fillRect(38, 13, 4, 2);
+    // Jaw
+    ctx.fillStyle = Sd; ctx.fillRect(34, 14, 6, 2);
+
+    // --- RIGHT ARM + GUN (front, propped forward) ---
+    // Forearm
+    ctx.fillStyle = S; ctx.fillRect(34, 14, 6, 4);
+    // Hand grip
+    ctx.fillStyle = Sd; ctx.fillRect(38, 14, 4, 3);
+
+    // Gun (rotates with aim from head level)
+    ctx.save(); ctx.translate(42, 16); ctx.rotate(aimAngle);
+    ctx.fillStyle = Gm; ctx.fillRect(-2, -2, 10, 4);
+    ctx.fillStyle = Gl; ctx.fillRect(-2, -3, 8, 2);
+    ctx.fillStyle = '#333'; ctx.fillRect(6, -2, 3, 3);
+    if(muzzleFlash>0){ctx.fillStyle=`rgba(255,200,50,${muzzleFlash})`;ctx.fillRect(8,-3,10,6);}
     ctx.restore();
-    // Legs (kneeling)
-    ctx.fillStyle = P; ctx.fillRect(12, 25, 9, 4);
-    ctx.fillStyle = P; ctx.fillRect(23, 25, 9, 4);
-    ctx.fillStyle = B; ctx.fillRect(12, 28, 9, 3); ctx.fillRect(23, 28, 9, 3);
   } else {
     // ===== STANDING POSE =====
     ctx.translate(x, y-h);
